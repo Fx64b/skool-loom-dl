@@ -52,7 +52,7 @@ func main() {
 
 	// Validate required flags
 	if *skoolURL == "" {
-		fmt.Println("Usage: skool-loom-dl -url=https://yourschool.skool.com/classroom/path [-cookies=cookies.json | -email=user@example.com -password=pass]")
+		fmt.Println("Usage: skool-loom-dl -url=https://skool.com/yourschool/classroom/path [-cookies=cookies.json | -email=user@example.com -password=pass]")
 		os.Exit(1)
 	}
 
