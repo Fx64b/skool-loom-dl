@@ -4,7 +4,10 @@ A Go utility to automatically scrape and download Loom videos from Skool.com cla
 
 ## Disclaimer
 
-**This tool is provided for educational and legitimate purposes only.** It is designed to help users download their own videos or content they have explicit permission to download. Please respect copyright laws and terms of service:
+> [!CAUTION]
+> **This tool is provided for educational and legitimate purposes only.**
+
+It is designed to help users download their own videos or content they have explicit permission to download. Please respect copyright laws and terms of service:
 
 - Only download videos you have the right to access and save
 - Do not use this tool to bypass paywalls or access unauthorized content
@@ -21,6 +24,7 @@ A Go utility to automatically scrape and download Loom videos from Skool.com cla
 - Toggleable headless mode for debugging
 - Improved error handling and detailed logs
 - Auto-scrolling to capture lazy-loaded content
+- Docker support for easy deployment
 
 ## Installation
 
@@ -54,10 +58,10 @@ go build -o skool-loom-dl
 
 ```bash
 # Using cookies for authentication
-./skool-loom-dl -url="https://yourschool.skool.com/classroom/your-classroom" -cookies="cookies.json"
+./skool-loom-dl -url="https://skool.com/yourschool/classroom/your-classroom" -cookies="cookies.json"
 
 # Using email/password for authentication
-./skool-loom-dl -url="https://yourschool.skool.com/classroom/your-classroom" -email="your@email.com" -password="yourpassword"
+./skool-loom-dl -url="https://skool.com/yourschool/classroom/your-classroom" -email="your@email.com" -password="yourpassword"
 ```
 
 ### Options
@@ -82,22 +86,101 @@ You must provide one of these authentication methods:
 
 ```bash
 # Basic usage with JSON cookies
-./skool-loom-dl -url="https://yourschool.skool.com/classroom/path" -cookies="cookies.json"
+./skool-loom-dl -url="https://skool.com/yourschool/classroom/path" -cookies="cookies.json"
 
 # Using email/password authentication
-./skool-loom-dl -url="https://yourschool.skool.com/classroom/path" -email="your@email.com" -password="yourpassword"
+./skool-loom-dl -url="https://skool.com/yourschool/classroom/path" -email="your@email.com" -password="yourpassword"
 
 # Using cookies.txt format
-./skool-loom-dl -url="https://yourschool.skool.com/classroom/path" -cookies="cookies.txt"
+./skool-loom-dl -url="https://skool.com/yourschool/classroom/path" -cookies="cookies.txt"
 
 # Specify output directory
-./skool-loom-dl -url="https://yourschool.skool.com/classroom/path" -cookies="cookies.json" -output="my_videos"
+./skool-loom-dl -url="https://skool.com/yourschool/classroom/path" -cookies="cookies.json" -output="my_videos"
 
 # Increase wait time for slow-loading pages
-./skool-loom-dl -url="https://yourschool.skool.com/classroom/path" -cookies="cookies.json" -wait=5
+./skool-loom-dl -url="https://skool.com/yourschool/classroom/path" -cookies="cookies.json" -wait=5
 
 # Disable headless mode for debugging
-./skool-loom-dl -url="https://yourschool.skool.com/classroom/path" -cookies="cookies.json" -headless=false
+./skool-loom-dl -url="https://skool.com/yourschool/classroom/path" -cookies="cookies.json" -headless=false
+```
+
+## Docker Usage
+
+The tool is available as a Docker container for easier deployment without installing dependencies.
+
+### Quick Start
+
+```bash
+# Build the image locally
+docker build -t skool-loom-dl .
+```
+
+### Basic Usage Pattern
+
+```bash
+docker run --rm -v $(pwd):/data skool-loom-dl [OPTIONS]
+```
+
+All downloads will be saved to your current directory.
+
+### Authentication Methods
+
+#### Using Email/Password (Recommended)
+
+```bash
+docker run --rm -v $(pwd):/data skool-loom-dl \
+  --url="https://skool.com/yourschool/classroom/path" \
+  --email="your@email.com" \
+  --password="yourpassword"
+```
+
+#### Using Cookies File
+
+```bash
+docker run --rm -v $(pwd):/data -v $(pwd)/cookies.json:/data/cookies.json skool-loom-dl \
+  --url="https://skool.com/yourschool/classroom/path" \
+  --cookies="/data/cookies.json"
+```
+
+### Examples
+
+```bash
+# Basic download with custom output directory
+docker run --rm -v $(pwd)/videos:/data skool-loom-dl \
+  --url="https://skool.com/yourschool/classroom/path" \
+  --email="your@email.com" \
+  --password="yourpassword"
+
+# With increased wait time
+docker run --rm -v $(pwd):/data skool-loom-dl \
+  --url="https://skool.com/yourschool/classroom/path" \
+  --email="your@email.com" \
+  --password="yourpassword" \
+  --wait=5
+```
+
+### Docker Compose Usage
+
+Create a `docker-compose.yml` file:
+
+```yaml
+version: '3'
+services:
+  skool-loom-dl:
+    image: skool-loom-dl
+    build: .
+    volumes:
+      - ./:/data
+    command: >
+      --url="https://skool.com/yourschool/classroom/path" 
+      --email="your@email.com" 
+      --password="yourpassword"
+```
+
+Then run:
+
+```bash
+docker-compose up
 ```
 
 ## Getting Cookies
@@ -121,7 +204,7 @@ You can use either cookie authentication or email/password login. For cookie aut
 As an alternative to cookie-based authentication, you can now directly provide your Skool.com login credentials:
 
 ```bash
-./skool-loom-dl -url="https://yourschool.skool.com/classroom/path" -email="your@email.com" -password="yourpassword"
+./skool-loom-dl -url="https://skool.com/yourschool/classroom/path" -email="your@email.com" -password="yourpassword"
 ```
 
 **Note:** Using email/password authentication is generally more reliable as it handles cookie refreshing automatically.
@@ -134,6 +217,7 @@ As an alternative to cookie-based authentication, you can now directly provide y
 - **Download errors**: Make sure yt-dlp is properly installed and updated
 - **Debugging**: Use `-headless=false` to see the browser window and what's happening
 - **Login issues**: For hard-to-debug problems, try disabling headless mode and increasing wait time
+- **Docker issues**: If having issues with the Docker container, try running with `--verbose=true` for additional logging
 
 ## License
 
