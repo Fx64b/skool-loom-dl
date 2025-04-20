@@ -14,10 +14,13 @@ A Go utility to automatically scrape and download Loom videos from Skool.com cla
 ## Features
 
 - Automatically scrape Loom video links from Skool.com classroom pages
+- Authentication via cookies or email/password login
 - Support for both JSON and Netscape cookies.txt formats
 - Downloads videos using yt-dlp with proper authentication
 - Configurable wait time for page loading
-- Simple command-line interface
+- Toggleable headless mode for debugging
+- Improved error handling and detailed logs
+- Auto-scrolling to capture lazy-loaded content
 
 ## Installation
 
@@ -42,7 +45,7 @@ cd skool-loom-dl
 # Or simply save the code as skool-loom-dl.go
 
 # Build the executable
-go build skool-loom-dl.go
+go build -o skool-loom-dl
 ```
 
 ## Usage
@@ -50,23 +53,39 @@ go build skool-loom-dl.go
 ### Basic Usage
 
 ```bash
+# Using cookies for authentication
 ./skool-loom-dl -url="https://yourschool.skool.com/classroom/your-classroom" -cookies="cookies.json"
+
+# Using email/password for authentication
+./skool-loom-dl -url="https://yourschool.skool.com/classroom/your-classroom" -email="your@email.com" -password="yourpassword"
 ```
 
 ### Options
 
 ```
--url      URL of the skool.com classroom page (required)
--cookies  Path to cookies file (JSON or TXT) for authentication (required)
--output   Directory to save downloaded videos (default: "downloads")
--wait     Time to wait for page to load in seconds (default: 2)
+-url        URL of the skool.com classroom page (required)
+-cookies    Path to cookies file (JSON or TXT) for authentication
+-email      Email for Skool login (alternative to cookies)
+-password   Password for Skool login (required with email)
+-output     Directory to save downloaded videos (default: "downloads")
+-wait       Time to wait for page to load in seconds (default: 2)
+-headless   Run in headless mode (default: true, set to false for debugging)
 ```
+
+### Authentication Methods
+
+You must provide one of these authentication methods:
+1. A cookies file with `-cookies`
+2. Email and password combination with `-email` and `-password`
 
 ### Examples
 
 ```bash
 # Basic usage with JSON cookies
 ./skool-loom-dl -url="https://yourschool.skool.com/classroom/path" -cookies="cookies.json"
+
+# Using email/password authentication
+./skool-loom-dl -url="https://yourschool.skool.com/classroom/path" -email="your@email.com" -password="yourpassword"
 
 # Using cookies.txt format
 ./skool-loom-dl -url="https://yourschool.skool.com/classroom/path" -cookies="cookies.txt"
@@ -76,11 +95,14 @@ go build skool-loom-dl.go
 
 # Increase wait time for slow-loading pages
 ./skool-loom-dl -url="https://yourschool.skool.com/classroom/path" -cookies="cookies.json" -wait=5
+
+# Disable headless mode for debugging
+./skool-loom-dl -url="https://yourschool.skool.com/classroom/path" -cookies="cookies.json" -headless=false
 ```
 
 ## Getting Cookies
 
-To use this tool, you'll need to export your browser cookies:
+You can use either cookie authentication or email/password login. For cookie authentication:
 
 ### For Chrome/Chromium
 1. Install the "Cookie-Editor" or "Get cookies.txt LOCALLY" extension
@@ -94,12 +116,24 @@ To use this tool, you'll need to export your browser cookies:
 3. Open the extension, select all cookies for the domain, and export
 4. Save the file and use it with the `-cookies` parameter
 
+## Email/Password Authentication
+
+As an alternative to cookie-based authentication, you can now directly provide your Skool.com login credentials:
+
+```bash
+./skool-loom-dl -url="https://yourschool.skool.com/classroom/path" -email="your@email.com" -password="yourpassword"
+```
+
+**Note:** Using email/password authentication is generally more reliable as it handles cookie refreshing automatically.
+
 ## Troubleshooting
 
-- **No videos found**: Make sure your cookies are valid and not expired
-- **Authentication errors**: Log in to your account again and export fresh cookies
-- **Incomplete page loading**: Try increasing the `-wait` parameter
+- **No videos found**: Make sure your authentication is valid and the classroom URL is correct
+- **Authentication errors**: Try using email/password authentication instead of cookies
+- **Incomplete page loading**: Try increasing the `-wait` parameter (e.g., `-wait=5` or `-wait=10`)
 - **Download errors**: Make sure yt-dlp is properly installed and updated
+- **Debugging**: Use `-headless=false` to see the browser window and what's happening
+- **Login issues**: For hard-to-debug problems, try disabling headless mode and increasing wait time
 
 ## License
 
