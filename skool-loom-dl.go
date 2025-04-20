@@ -30,6 +30,16 @@ type JSONCookie struct {
 }
 
 func main() {
+	fmt.Println(`
+    ╔═══╗╔╗   ╔═══╗
+    ║╔═╗║║║   ║╔═╗║
+    ║╚══╗║║   ║║ ║║
+    ╚══╗║║║   ║║ ║║
+    ║╚═╝║║╚═╗ ║╚═╝║
+    ╚═══╝╚══╝ ╚═══╝
+    Skool Loom Downloader
+    `)
+
 	// Define command line flags
 	skoolURL := flag.String("url", "", "URL of the skool.com classroom to scrape (required)")
 	cookiesFile := flag.String("cookies", "", "Path to cookies file (JSON or TXT) for authentication")
