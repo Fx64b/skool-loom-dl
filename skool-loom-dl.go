@@ -134,7 +134,6 @@ func scrapeWithLogin(pageURL, email, password string, waitTime int, headless boo
 
 	// Look for login button and click it
 	err = chromedp.Run(ctx, chromedp.Tasks{
-		// Try to find and click a login link
 		chromedp.Click(`//button[@type="submit" and .//span[contains(text(), "Log") or contains(text(), "Log In") or contains(text(), "Login")]]`, chromedp.BySearch),
 		chromedp.Sleep(3 * time.Second),
 		chromedp.Location(&currentURL),
@@ -156,7 +155,6 @@ func scrapeWithLogin(pageURL, email, password string, waitTime int, headless boo
 
 	fmt.Println("📍 Login page:", currentURL)
 
-	// Now try to enter credentials and login
 	err = chromedp.Run(ctx, chromedp.Tasks{
 		// Wait for the email input field to be visible
 		chromedp.WaitVisible(`//input[@type="email" or @name="email" or contains(@placeholder, "email")]`, chromedp.BySearch),
@@ -193,7 +191,6 @@ func scrapeWithLogin(pageURL, email, password string, waitTime int, headless boo
 
 	fmt.Println("✅ Login successful! Redirected to:", currentURL)
 
-	// Now navigate to the target classroom page
 	fmt.Println("🏫 Navigating to classroom:", pageURL)
 	err = chromedp.Run(ctx, chromedp.Tasks{
 		chromedp.Navigate(pageURL),
@@ -212,7 +209,7 @@ func scrapeWithLogin(pageURL, email, password string, waitTime int, headless boo
 		return nil, fmt.Errorf("authentication succeeded but redirected to public page, check URL permissions")
 	}
 
-	// Scroll and get HTML content
+	// NOTE: not 100% sure if this is needed, but it seems to help with loading
 	err = chromedp.Run(ctx, chromedp.Tasks{
 		// Scroll to load lazy content
 		chromedp.Evaluate(`
@@ -228,10 +225,8 @@ func scrapeWithLogin(pageURL, email, password string, waitTime int, headless boo
 			scrollDown();
 		`, nil),
 
-		// Wait for lazy-loaded content
 		chromedp.Sleep(5 * time.Second),
 
-		// Get HTML content
 		chromedp.OuterHTML("html", &html),
 	})
 
@@ -272,7 +267,6 @@ func scrapeWithLogin(pageURL, email, password string, waitTime int, headless boo
 	return result, nil
 }
 
-// Existing function modified to support headless mode toggle
 func scrapeWithCookies(pageURL, cookiesFile string, waitTime int, headless bool) ([]string, error) {
 	// Setup browser with debugging options
 	opts := append(chromedp.DefaultExecAllocatorOptions[:],
@@ -310,23 +304,19 @@ func scrapeWithCookies(pageURL, cookiesFile string, waitTime int, headless bool)
 		}
 	}
 
-	// Enable network monitoring
 	if err := chromedp.Run(ctx, network.Enable()); err != nil {
 		return nil, err
 	}
 
-	// Use SetCookies to set all cookies at once
 	if err := chromedp.Run(ctx, network.SetCookies(cookies)); err != nil {
 		return nil, fmt.Errorf("error setting cookies: %v", err)
 	}
 
-	// Variables to track state
 	var currentURL string
 	var html string
 
 	// Add auth headers and try multi-step navigation approach
 	err = chromedp.Run(ctx, chromedp.Tasks{
-		// Set extra headers that might be needed
 		network.SetExtraHTTPHeaders(network.Headers{
 			"Referer":         "https://www.skool.com/",
 			"Accept":          "text/html,application/xhtml+xml,application/xml",
@@ -345,7 +335,6 @@ func scrapeWithCookies(pageURL, cookiesFile string, waitTime int, headless bool)
 			return nil
 		}),
 
-		// Try to navigate to the classroom page
 		chromedp.Navigate(pageURL),
 		chromedp.Sleep(time.Duration(waitTime) * time.Second),
 
@@ -370,10 +359,8 @@ func scrapeWithCookies(pageURL, cookiesFile string, waitTime int, headless bool)
 			scrollDown();
 		`, nil),
 
-		// Wait a bit more for content to load after scrolling
 		chromedp.Sleep(3 * time.Second),
 
-		// Get HTML after content has loaded
 		chromedp.OuterHTML("html", &html),
 	})
 
@@ -483,178 +470,6 @@ func parseJSONCookies(content []byte) ([]*network.CookieParam, error) {
 	return cookies, nil
 }
 
-func scrapeLoomURLs(pageURL, cookiesFile string, waitTime int) ([]string, error) {
-	// Setup browser with debugging options
-	opts := append(chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.Flag("headless", true), // Set to false to see what's happening visually
-		chromedp.Flag("disable-gpu", true),
-		chromedp.Flag("no-sandbox", true),
-		chromedp.Flag("window-size", "1920,1080"), // Set a reasonable window size
-		chromedp.UserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"),
-	)
-
-	allocCtx, cancel := chromedp.NewExecAllocator(context.Background(), opts...)
-	defer cancel()
-
-	// Enable verbose logging
-	ctx, cancel := chromedp.NewContext(allocCtx, chromedp.WithLogf(log.Printf))
-	defer cancel()
-
-	ctx, cancel = context.WithTimeout(ctx, 180*time.Second)
-	defer cancel()
-
-	// Load and set cookies
-	cookies, err := parseCookiesFile(cookiesFile)
-	if err != nil {
-		return nil, fmt.Errorf("error parsing cookies: %v", err)
-	}
-
-	// Debug cookie values before setting
-	fmt.Println("🍪 Setting these cookies:")
-	for _, c := range cookies {
-		fmt.Printf("  Domain: %s, Name: %s, Path: %s, Secure: %v, HttpOnly: %v, SameSite: %v\n",
-			c.Domain, c.Name, c.Path, c.Secure, c.HTTPOnly, c.SameSite)
-
-		// Special handling for Skool auth token
-		if c.Name == "auth_token" && strings.Contains(c.Domain, "skool") {
-			fmt.Printf("  🔑 Auth token found: %s...\n", c.Value[:20])
-		}
-	}
-
-	// Enable network monitoring
-	if err := chromedp.Run(ctx, network.Enable()); err != nil {
-		return nil, err
-	}
-
-	// Use SetCookies to set all cookies at once
-	if err := chromedp.Run(ctx, network.SetCookies(cookies)); err != nil {
-		return nil, fmt.Errorf("error setting cookies: %v", err)
-	}
-
-	// Verify cookies actually got set
-	var gotCookies []*network.Cookie
-	if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		var err error
-		gotCookies, err = network.GetCookies().Do(ctx)
-		return err
-	})); err != nil {
-		return nil, err
-	}
-
-	fmt.Println("🍪 Actual cookies after setting:")
-	for _, c := range gotCookies {
-		fmt.Printf("  Domain: %s, Name: %s, Path: %s\n", c.Domain, c.Name, c.Path)
-	}
-
-	// Variables to track state
-	var currentURL string
-	var html string
-
-	// Add auth headers and try multi-step navigation approach
-	err = chromedp.Run(ctx, chromedp.Tasks{
-		// Set extra headers that might be needed
-		network.SetExtraHTTPHeaders(network.Headers{
-			"Referer":         "https://www.skool.com/",
-			"Accept":          "text/html,application/xhtml+xml,application/xml",
-			"Accept-Language": "en-US,en;q=0.9",
-			"Connection":      "keep-alive",
-		}),
-
-		// Navigate to the main site first
-		chromedp.Navigate("https://www.skool.com/"),
-		chromedp.Sleep(5 * time.Second),
-
-		// Get the current location to see if we're logged in
-		chromedp.Location(&currentURL),
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			fmt.Printf("🌐 Initial navigation landed on: %s\n", currentURL)
-			return nil
-		}),
-
-		// Try to navigate to the classroom page
-		chromedp.Navigate(pageURL),
-		chromedp.Sleep(time.Duration(waitTime) * time.Second),
-
-		// Check where we landed
-		chromedp.Location(&currentURL),
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			fmt.Printf("🌐 After classroom navigation, landed on: %s\n", currentURL)
-			return nil
-		}),
-
-		// Try JavaScript navigation as a fallback
-		chromedp.Evaluate(`
-			// Try to navigate via JS if we're not on the classroom page
-			if (!window.location.href.includes('/classroom')) {
-				console.log('Trying JS navigation to classroom');
-				window.location.href = '`+pageURL+`';
-			}
-		`, nil),
-		chromedp.Sleep(5 * time.Second),
-
-		// Final location check and scroll to load content
-		chromedp.Location(&currentURL),
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			fmt.Printf("🌐 Final URL after all navigation attempts: %s\n", currentURL)
-			return nil
-		}),
-
-		// Execute JavaScript to scroll through the page to load lazy content
-		chromedp.Evaluate(`
-			function scrollDown() {
-				window.scrollTo(0, document.body.scrollHeight/2);
-				setTimeout(() => {
-					window.scrollTo(0, document.body.scrollHeight);
-				}, 1000);
-			}
-			scrollDown();
-		`, nil),
-
-		// Wait a bit more for content to load after scrolling
-		chromedp.Sleep(3 * time.Second),
-
-		// Get HTML after content has loaded
-		chromedp.OuterHTML("html", &html),
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	// Check if we're on the about page (indicating auth failed)
-	if strings.Contains(currentURL, "/about") || strings.Contains(html, "Sign up") || strings.Contains(html, "Log in") {
-		fmt.Println("⚠️ WARNING: Authentication appears to have failed - landed on public page")
-		fmt.Println("⚠️ Make sure your cookies are valid and the auth_token cookie is present")
-	}
-
-	// Find Loom URLs
-	shareRegex := regexp.MustCompile(`https?://(?:www\.)?loom\.com/share/[a-zA-Z0-9]+`)
-	embedRegex := regexp.MustCompile(`https?://(?:www\.)?loom\.com/embed/([a-zA-Z0-9]+)`)
-
-	matches := shareRegex.FindAllString(html, -1)
-
-	// Convert embed URLs to share URLs
-	embedMatches := embedRegex.FindAllStringSubmatch(html, -1)
-	for _, match := range embedMatches {
-		if len(match) >= 2 {
-			shareURL := fmt.Sprintf("https://www.loom.com/share/%s", match[1])
-			matches = append(matches, shareURL)
-		}
-	}
-
-	// Remove duplicates
-	uniqueURLs := make(map[string]bool)
-	var result []string
-	for _, url := range matches {
-		if !uniqueURLs[url] {
-			uniqueURLs[url] = true
-			result = append(result, url)
-		}
-	}
-
-	return result, nil
-}
-
 // parseNetscapeCookies parses cookies in Netscape cookies.txt format
 func parseNetscapeCookies(content []byte) ([]*network.CookieParam, error) {
 	lines := strings.Split(string(content), "\n")
@@ -703,7 +518,6 @@ func parseNetscapeCookies(content []byte) ([]*network.CookieParam, error) {
 	return cookies, nil
 }
 
-// Helper function to parse expiry time
 func parseExpiry(s string) (int64, error) {
 	expiry, err := parseInt64(s)
 	if err != nil {
@@ -712,7 +526,6 @@ func parseExpiry(s string) (int64, error) {
 	return expiry, nil
 }
 
-// Helper function to parse string to int64
 func parseInt64(s string) (int64, error) {
 	var result int64
 	_, err := fmt.Sscanf(s, "%d", &result)
