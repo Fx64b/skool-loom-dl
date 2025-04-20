@@ -18,7 +18,6 @@ import (
 	"github.com/chromedp/chromedp"
 )
 
-// JSONCookie represents the structure of cookies in JSON format
 type JSONCookie struct {
 	Host       string `json:"host"`
 	Name       string `json:"name"`
@@ -57,7 +56,9 @@ func main() {
 	}
 
 	// Create output directory if it doesn't exist
-	os.MkdirAll(*outputDir, 0755)
+	if err := os.MkdirAll(*outputDir, 0755); err != nil {
+		log.Fatalf("Error creating output directory: %v", err)
+	}
 
 	fmt.Println("🔍 Scraping Loom videos from:", *skoolURL)
 
@@ -434,10 +435,7 @@ func parseJSONCookies(content []byte) ([]*network.CookieParam, error) {
 	var cookies []*network.CookieParam
 	for _, c := range jsonCookies {
 		// Clean up the host field (remove leading dot if present)
-		domain := c.Host
-		if strings.HasPrefix(domain, ".") {
-			domain = domain[1:]
-		}
+		domain := strings.TrimPrefix(c.Host, ".")
 
 		cookie := &network.CookieParam{
 			Domain:   domain,
@@ -486,10 +484,7 @@ func parseNetscapeCookies(content []byte) ([]*network.CookieParam, error) {
 			continue
 		}
 
-		domain := fields[0]
-		if strings.HasPrefix(domain, ".") {
-			domain = domain[1:]
-		}
+		domain := strings.TrimPrefix(fields[0], ".")
 
 		cookie := &network.CookieParam{
 			Domain:   domain,
