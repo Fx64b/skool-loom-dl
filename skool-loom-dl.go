@@ -18,6 +18,18 @@ import (
 	"github.com/chromedp/chromedp"
 )
 
+const (
+	defaultWaitTime  = 2
+	defaultOutputDir = "downloads"
+	defaultHeadless  = true
+	browserTimeout   = 180 * time.Second
+	initialWaitTime  = 3 * time.Second
+	loginWaitTime    = 3 * time.Second
+	skoolBaseURL     = "https://www.skool.com/"
+	skoolLoginURL    = "https://www.skool.com/login"
+)
+
+// JSONCookie represents a cookie in the JSON format
 type JSONCookie struct {
 	Host       string `json:"host"`
 	Name       string `json:"name"`
@@ -29,58 +41,31 @@ type JSONCookie struct {
 	SameSite   int    `json:"sameSite"`
 }
 
+// Config holds application configuration
+type Config struct {
+	SkoolURL    string
+	CookiesFile string
+	Email       string
+	Password    string
+	OutputDir   string
+	WaitTime    int
+	Headless    bool
+}
+
 func main() {
-	fmt.Println(`
-    ╔═══╗╔╗   ╔═══╗
-    ║╔═╗║║║   ║╔═╗║
-    ║╚══╗║║   ║║ ║║
-    ╚══╗║║║   ║║ ║║
-    ║╚═╝║║╚═╗ ║╚═╝║
-    ╚═══╝╚══╝ ╚═══╝
-    Skool Loom Downloader
-    `)
-
-	// Define command line flags
-	skoolURL := flag.String("url", "", "URL of the skool.com classroom to scrape (required)")
-	cookiesFile := flag.String("cookies", "", "Path to cookies file (JSON or TXT) for authentication")
-	email := flag.String("email", "", "Email for Skool login (alternative to cookies)")
-	password := flag.String("password", "", "Password for Skool login (required with email)")
-	outputDir := flag.String("output", "downloads", "Directory to save downloaded videos")
-	waitTime := flag.Int("wait", 2, "Time to wait for page to load in seconds")
-	headless := flag.Bool("headless", true, "Run in headless mode (no browser UI)")
-	flag.Parse()
-
-	// Validate required flags
-	if *skoolURL == "" {
-		fmt.Println("Usage: skool-loom-dl -url=https://skool.com/yourschool/classroom/path [-cookies=cookies.json | -email=user@example.com -password=pass]")
-		os.Exit(1)
-	}
-
-	// Check authentication method
-	usingEmail := *email != "" && *password != ""
-	usingCookies := *cookiesFile != ""
-
-	if !usingEmail && !usingCookies {
-		fmt.Println("Error: You must provide either cookies file or email+password for authentication")
-		os.Exit(1)
-	}
+	printBanner()
+	config := parseFlags()
+	validateConfig(config)
 
 	// Create output directory if it doesn't exist
-	if err := os.MkdirAll(*outputDir, 0755); err != nil {
+	if err := os.MkdirAll(config.OutputDir, 0755); err != nil {
 		log.Fatalf("Error creating output directory: %v", err)
 	}
 
-	fmt.Println("🔍 Scraping Loom videos from:", *skoolURL)
+	fmt.Println("🔍 Scraping Loom videos from:", config.SkoolURL)
 
-	var loomURLs []string
-	var err error
-
-	if usingEmail {
-		loomURLs, err = scrapeWithLogin(*skoolURL, *email, *password, *waitTime, *headless)
-	} else {
-		loomURLs, err = scrapeWithCookies(*skoolURL, *cookiesFile, *waitTime, *headless)
-	}
-
+	// Scrape videos based on auth method
+	loomURLs, err := scrapeVideos(config)
 	if err != nil {
 		log.Fatalf("Error scraping: %v", err)
 	}
@@ -95,7 +80,7 @@ func main() {
 	// Download each video
 	for i, url := range loomURLs {
 		fmt.Printf("\n[%d/%d] 📥 Downloading: %s\n", i+1, len(loomURLs), url)
-		if err := downloadWithYtDlp(url, *cookiesFile, *outputDir); err != nil {
+		if err := downloadWithYtDlp(url, config.CookiesFile, config.OutputDir); err != nil {
 			fmt.Printf("❌ Error: %v\n", err)
 		}
 	}
@@ -103,9 +88,56 @@ func main() {
 	fmt.Println("\n✅ Download process completed!")
 }
 
-// New function for email/password based login and scraping
-func scrapeWithLogin(pageURL, email, password string, waitTime int, headless bool) ([]string, error) {
-	// Setup browser
+func printBanner() {
+	fmt.Println(`
+    ╔═══╗╔╗   ╔═══╗
+    ║╔═╗║║║   ║╔═╗║
+    ║╚══╗║║   ║║ ║║
+    ╚══╗║║║   ║║ ║║
+    ║╚═╝║║╚═╗ ║╚═╝║
+    ╚═══╝╚══╝ ╚═══╝
+    Skool Loom Downloader
+    `)
+}
+
+func parseFlags() Config {
+	config := Config{}
+
+	flag.StringVar(&config.SkoolURL, "url", "", "URL of the skool.com classroom to scrape (required)")
+	flag.StringVar(&config.CookiesFile, "cookies", "", "Path to cookies file (JSON or TXT) for authentication")
+	flag.StringVar(&config.Email, "email", "", "Email for Skool login (alternative to cookies)")
+	flag.StringVar(&config.Password, "password", "", "Password for Skool login (required with email)")
+	flag.StringVar(&config.OutputDir, "output", defaultOutputDir, "Directory to save downloaded videos")
+	flag.IntVar(&config.WaitTime, "wait", defaultWaitTime, "Time to wait for page to load in seconds")
+	flag.BoolVar(&config.Headless, "headless", defaultHeadless, "Run in headless mode (no browser UI)")
+
+	flag.Parse()
+	return config
+}
+
+func validateConfig(config Config) {
+	if config.SkoolURL == "" {
+		fmt.Println("Usage: skool-loom-dl -url=https://skool.com/yourschool/classroom/path [-cookies=cookies.json | -email=user@example.com -password=pass]")
+		os.Exit(1)
+	}
+
+	usingEmail := config.Email != "" && config.Password != ""
+	usingCookies := config.CookiesFile != ""
+
+	if !usingEmail && !usingCookies {
+		fmt.Println("Error: You must provide either cookies file or email+password for authentication")
+		os.Exit(1)
+	}
+}
+
+func scrapeVideos(config Config) ([]string, error) {
+	if config.Email != "" && config.Password != "" {
+		return scrapeWithLogin(config)
+	}
+	return scrapeWithCookies(config)
+}
+
+func setupBrowser(headless bool) (context.Context, context.CancelFunc) {
 	opts := append(chromedp.DefaultExecAllocatorOptions[:],
 		chromedp.Flag("headless", headless),
 		chromedp.Flag("disable-gpu", true),
@@ -115,141 +147,18 @@ func scrapeWithLogin(pageURL, email, password string, waitTime int, headless boo
 	)
 
 	allocCtx, cancel := chromedp.NewExecAllocator(context.Background(), opts...)
-	defer cancel()
+	ctx, cancel2 := chromedp.NewContext(allocCtx, chromedp.WithLogf(log.Printf))
+	ctx, cancel3 := context.WithTimeout(ctx, browserTimeout)
 
-	ctx, cancel := chromedp.NewContext(allocCtx, chromedp.WithLogf(log.Printf))
-	defer cancel()
-
-	ctx, cancel = context.WithTimeout(ctx, 180*time.Second)
-	defer cancel()
-
-	// Variables to track state
-	var currentURL string
-	var html string
-	var loginSuccess bool
-
-	fmt.Println("🔑 Attempting login with email and password...")
-
-	// First, navigate to the main Skool site
-	err := chromedp.Run(ctx, chromedp.Tasks{
-		chromedp.Navigate("https://www.skool.com/"),
-		chromedp.Sleep(3 * time.Second),
-		chromedp.Location(&currentURL),
-	})
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to navigate to Skool: %v", err)
+	// Return a cancel function that calls all three cancel functions
+	return ctx, func() {
+		cancel3()
+		cancel2()
+		cancel()
 	}
+}
 
-	fmt.Println("📍 Landed on:", currentURL)
-
-	err = chromedp.Run(ctx, chromedp.Tasks{
-		// Wait for the button containing a span with "Log In" text to become visible
-		chromedp.WaitVisible(`//button[@type="button"]/span[text()="Log In"]`, chromedp.BySearch),
-
-		// Click the button
-		chromedp.Click(`//button[@type="button"]/span[text()="Log In"]`, chromedp.BySearch),
-
-		chromedp.Sleep(2 * time.Second),
-		chromedp.Location(&currentURL),
-	})
-
-	if err != nil {
-		fmt.Println("⚠️ Couldn't find login button, trying direct navigation to login page...")
-		// If we can't find a login button, try direct navigation to the login page
-		err = chromedp.Run(ctx, chromedp.Tasks{
-			chromedp.Navigate("https://www.skool.com/login"),
-			chromedp.Sleep(3 * time.Second),
-			chromedp.Location(&currentURL),
-		})
-
-		if err != nil {
-			return nil, fmt.Errorf("couldn't access login page: %v", err)
-		}
-	}
-
-	fmt.Println("📍 Login page:", currentURL)
-
-	err = chromedp.Run(ctx, chromedp.Tasks{
-		// Wait for the email input field to be visible
-		chromedp.WaitVisible(`//input[@type="email" or @name="email" or contains(@placeholder, "email")]`, chromedp.BySearch),
-
-		// Enter email
-		chromedp.SendKeys(`//input[@type="email" or @name="email" or contains(@placeholder, "email")]`, email, chromedp.BySearch),
-
-		// Wait for the password input field
-		chromedp.WaitVisible(`//input[@type="password" or @name="password" or contains(@placeholder, "password")]`, chromedp.BySearch),
-
-		// Enter password
-		chromedp.SendKeys(`//input[@type="password" or @name="password" or contains(@placeholder, "password")]`, password, chromedp.BySearch),
-
-		// Click submit/login button
-		chromedp.Click(`//button[@type="submit" and .//span[contains(text(), "Log") or contains(text(), "Log In") or contains(text(), "Login")]]`, chromedp.BySearch),
-
-		// Wait for navigation to complete
-		chromedp.Sleep(5 * time.Second),
-
-		// Check current URL
-		chromedp.Location(&currentURL),
-
-		// Determine if login was successful by checking if we're no longer on the login page
-		chromedp.Evaluate(`!window.location.href.includes('/login') && !document.body.textContent.includes('Incorrect password') && !document.body.textContent.includes('No account found for this email.')`, &loginSuccess),
-	})
-
-	if err != nil {
-		return nil, fmt.Errorf("login process failed: %v", err)
-	}
-
-	if !loginSuccess {
-		return nil, fmt.Errorf("login failed: invalid credentials or captcha required")
-	}
-
-	fmt.Println("✅ Login successful! Redirected to:", currentURL)
-
-	fmt.Println("🏫 Navigating to classroom:", pageURL)
-	err = chromedp.Run(ctx, chromedp.Tasks{
-		chromedp.Navigate(pageURL),
-		chromedp.Sleep(time.Duration(waitTime) * time.Second),
-		chromedp.Location(&currentURL),
-	})
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to navigate to classroom: %v", err)
-	}
-
-	fmt.Println("📍 Landed on:", currentURL)
-
-	// Check if we're on the right page and scroll to load content
-	if strings.Contains(currentURL, "/about") {
-		return nil, fmt.Errorf("authentication succeeded but redirected to public page, check URL permissions")
-	}
-
-	// NOTE: not 100% sure if this is needed, but it seems to help with loading
-	err = chromedp.Run(ctx, chromedp.Tasks{
-		// Scroll to load lazy content
-		chromedp.Evaluate(`
-			function scrollDown() {
-				window.scrollTo(0, document.body.scrollHeight/3);
-				setTimeout(() => {
-					window.scrollTo(0, document.body.scrollHeight*2/3);
-					setTimeout(() => {
-						window.scrollTo(0, document.body.scrollHeight);
-					}, 1000);
-				}, 1000);
-			}
-			scrollDown();
-		`, nil),
-
-		chromedp.Sleep(5 * time.Second),
-
-		chromedp.OuterHTML("html", &html),
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	// Find Loom URLs
+func extractLoomURLs(html string) []string {
 	shareRegex := regexp.MustCompile(`https?://(?:www\.)?loom\.com/share/[a-zA-Z0-9]+`)
 	embedRegex := regexp.MustCompile(`https?://(?:www\.)?loom\.com/embed/([a-zA-Z0-9]+)`)
 
@@ -274,51 +183,99 @@ func scrapeWithLogin(pageURL, email, password string, waitTime int, headless boo
 		}
 	}
 
-	if len(result) == 0 {
-		fmt.Println("⚠️ No videos found. Contents of the page:")
-		fmt.Println(html[:1000] + "...")
-	}
-
-	return result, nil
+	return result
 }
 
-func scrapeWithCookies(pageURL, cookiesFile string, waitTime int, headless bool) ([]string, error) {
-	// Setup browser with debugging options
-	opts := append(chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.Flag("headless", headless),
-		chromedp.Flag("disable-gpu", true),
-		chromedp.Flag("no-sandbox", true),
-		chromedp.Flag("window-size", "1920,1080"),
-		chromedp.UserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"),
-	)
-
-	allocCtx, cancel := chromedp.NewExecAllocator(context.Background(), opts...)
+func scrapeWithLogin(config Config) ([]string, error) {
+	ctx, cancel := setupBrowser(config.Headless)
 	defer cancel()
 
-	ctx, cancel := chromedp.NewContext(allocCtx, chromedp.WithLogf(log.Printf))
-	defer cancel()
+	var currentURL string
+	var loginSuccess bool
 
-	ctx, cancel = context.WithTimeout(ctx, 180*time.Second)
+	fmt.Println("🔑 Attempting login with email and password...")
+
+	// Navigate to the main Skool site
+	if err := chromedp.Run(ctx, chromedp.Tasks{
+		chromedp.Navigate(skoolBaseURL),
+		chromedp.Sleep(initialWaitTime),
+		chromedp.Location(&currentURL),
+	}); err != nil {
+		return nil, fmt.Errorf("failed to navigate to Skool: %v", err)
+	}
+
+	fmt.Println("📍 Landed on:", currentURL)
+
+	// Try to find and click the login button
+	err := chromedp.Run(ctx, chromedp.Tasks{
+		chromedp.WaitVisible(`//button[@type="button"]/span[text()="Log In"]`, chromedp.BySearch),
+		chromedp.Click(`//button[@type="button"]/span[text()="Log In"]`, chromedp.BySearch),
+		chromedp.Sleep(2 * time.Second),
+		chromedp.Location(&currentURL),
+	})
+
+	// If login button not found, navigate directly to login page
+	if err != nil {
+		fmt.Println("⚠️ Couldn't find login button, trying direct navigation to login page...")
+		if err := chromedp.Run(ctx, chromedp.Tasks{
+			chromedp.Navigate(skoolLoginURL),
+			chromedp.Sleep(initialWaitTime),
+			chromedp.Location(&currentURL),
+		}); err != nil {
+			return nil, fmt.Errorf("couldn't access login page: %v", err)
+		}
+	}
+
+	fmt.Println("📍 Login page:", currentURL)
+
+	// Complete the login form
+	if err := chromedp.Run(ctx, chromedp.Tasks{
+		chromedp.WaitVisible(`//input[@type="email" or @name="email" or contains(@placeholder, "email")]`, chromedp.BySearch),
+		chromedp.SendKeys(`//input[@type="email" or @name="email" or contains(@placeholder, "email")]`, config.Email, chromedp.BySearch),
+
+		chromedp.WaitVisible(`//input[@type="password" or @name="password" or contains(@placeholder, "password")]`, chromedp.BySearch),
+		chromedp.SendKeys(`//input[@type="password" or @name="password" or contains(@placeholder, "password")]`, config.Password, chromedp.BySearch),
+
+		chromedp.Click(`//button[@type="submit" and .//span[contains(text(), "Log") or contains(text(), "Log In") or contains(text(), "Login")]]`, chromedp.BySearch),
+
+		chromedp.Sleep(loginWaitTime),
+		chromedp.Location(&currentURL),
+		chromedp.Evaluate(`!window.location.href.includes('/login') && !document.body.textContent.includes('Incorrect password') && !document.body.textContent.includes('No account found for this email.')`, &loginSuccess),
+	}); err != nil {
+		return nil, fmt.Errorf("login process failed: %v", err)
+	}
+
+	if !loginSuccess {
+		return nil, fmt.Errorf("login failed: invalid credentials or captcha required")
+	}
+
+	fmt.Println("✅ Login successful! Redirected to:", currentURL)
+	return navigateAndScrape(ctx, config.SkoolURL, config.WaitTime)
+}
+
+func scrapeWithCookies(config Config) ([]string, error) {
+	ctx, cancel := setupBrowser(config.Headless)
 	defer cancel()
 
 	// Load and set cookies
-	cookies, err := parseCookiesFile(cookiesFile)
+	cookies, err := parseCookiesFile(config.CookiesFile)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing cookies: %v", err)
 	}
 
-	// Debug cookie values before setting
-	fmt.Println("🍪 Setting these cookies:")
+	// Log cookie info
+	fmt.Println("🍪 Setting cookies...")
 	for _, c := range cookies {
-		fmt.Printf("  Domain: %s, Name: %s, Path: %s, Secure: %v, HttpOnly: %v, SameSite: %v\n",
-			c.Domain, c.Name, c.Path, c.Secure, c.HTTPOnly, c.SameSite)
-
-		// Special handling for Skool auth token
 		if c.Name == "auth_token" && strings.Contains(c.Domain, "skool") {
-			fmt.Printf("  🔑 Auth token found: %s...\n", c.Value[:20])
+			truncatedValue := c.Value
+			if len(truncatedValue) > 20 {
+				truncatedValue = truncatedValue[:20] + "..."
+			}
+			fmt.Printf("  🔑 Auth token found: %s\n", truncatedValue)
 		}
 	}
 
+	// Enable network and set cookies
 	if err := chromedp.Run(ctx, network.Enable()); err != nil {
 		return nil, err
 	}
@@ -328,106 +285,71 @@ func scrapeWithCookies(pageURL, cookiesFile string, waitTime int, headless bool)
 	}
 
 	var currentURL string
-	var html string
-
-	// Add auth headers and try multi-step navigation approach
+	// Set headers and navigate first to main site, then to target URL
 	err = chromedp.Run(ctx, chromedp.Tasks{
 		network.SetExtraHTTPHeaders(network.Headers{
-			"Referer":         "https://www.skool.com/",
+			"Referer":         skoolBaseURL,
 			"Accept":          "text/html,application/xhtml+xml,application/xml",
 			"Accept-Language": "en-US,en;q=0.9",
 			"Connection":      "keep-alive",
 		}),
-
-		// Navigate to the main site first
-		chromedp.Navigate("https://www.skool.com/"),
-		chromedp.Sleep(5 * time.Second),
-
-		// Get the current location to see if we're logged in
+		chromedp.Navigate(skoolBaseURL),
+		chromedp.Sleep(initialWaitTime),
 		chromedp.Location(&currentURL),
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			fmt.Printf("🌐 Initial navigation landed on: %s\n", currentURL)
-			return nil
-		}),
-
-		chromedp.Navigate(pageURL),
-		chromedp.Sleep(time.Duration(waitTime) * time.Second),
-
-		// Check where we landed
-		chromedp.Location(&currentURL),
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			fmt.Printf("🌐 After classroom navigation, landed on: %s\n", currentURL)
-			return nil
-		}),
-
-		// Execute JavaScript to scroll through the page to load lazy content
-		chromedp.Evaluate(`
-			function scrollDown() {
-				window.scrollTo(0, document.body.scrollHeight/3);
-				setTimeout(() => {
-					window.scrollTo(0, document.body.scrollHeight*2/3);
-					setTimeout(() => {
-						window.scrollTo(0, document.body.scrollHeight);
-					}, 1000);
-				}, 1000);
-			}
-			scrollDown();
-		`, nil),
-
-		chromedp.Sleep(3 * time.Second),
-
-		chromedp.OuterHTML("html", &html),
 	})
 
 	if err != nil {
+		return nil, fmt.Errorf("failed to navigate to main site: %v", err)
+	}
+
+	fmt.Printf("🌐 Initial navigation landed on: %s\n", currentURL)
+	return navigateAndScrape(ctx, config.SkoolURL, config.WaitTime)
+}
+
+func navigateAndScrape(ctx context.Context, targetURL string, waitTime int) ([]string, error) {
+	var currentURL, html string
+
+	fmt.Println("🏫 Navigating to classroom:", targetURL)
+	if err := chromedp.Run(ctx, chromedp.Tasks{
+		chromedp.Navigate(targetURL),
+		chromedp.Sleep(time.Duration(waitTime) * time.Second),
+		chromedp.Location(&currentURL),
+	}); err != nil {
+		return nil, fmt.Errorf("failed to navigate to classroom: %v", err)
+	}
+
+	fmt.Println("📍 Landed on:", currentURL)
+
+	// Check if we're on the right page
+	if strings.Contains(currentURL, "/about") {
+		return nil, fmt.Errorf("authentication succeeded but redirected to public page, check URL permissions")
+	}
+
+	// Get page content
+	if err := chromedp.Run(ctx, chromedp.Tasks{
+		chromedp.OuterHTML("html", &html),
+	}); err != nil {
 		return nil, err
 	}
 
-	// Check if we're on the about page (indicating auth failed)
-	if strings.Contains(currentURL, "/about") || strings.Contains(html, "Sign up") || strings.Contains(html, "Log in") {
-		fmt.Println("⚠️ WARNING: Authentication appears to have failed - landed on public page")
-		fmt.Println("⚠️ Make sure your cookies are valid and the auth_token cookie is present")
+	// Extract and return video URLs
+	urls := extractLoomURLs(html)
+	if len(urls) == 0 {
+		fmt.Println("⚠️ No videos found on the page.")
 	}
 
-	// Find Loom URLs
-	shareRegex := regexp.MustCompile(`https?://(?:www\.)?loom\.com/share/[a-zA-Z0-9]+`)
-	embedRegex := regexp.MustCompile(`https?://(?:www\.)?loom\.com/embed/([a-zA-Z0-9]+)`)
-
-	matches := shareRegex.FindAllString(html, -1)
-
-	// Convert embed URLs to share URLs
-	embedMatches := embedRegex.FindAllStringSubmatch(html, -1)
-	for _, match := range embedMatches {
-		if len(match) >= 2 {
-			shareURL := fmt.Sprintf("https://www.loom.com/share/%s", match[1])
-			matches = append(matches, shareURL)
-		}
-	}
-
-	// Remove duplicates
-	uniqueURLs := make(map[string]bool)
-	var result []string
-	for _, url := range matches {
-		if !uniqueURLs[url] {
-			uniqueURLs[url] = true
-			result = append(result, url)
-		}
-	}
-
-	return result, nil
+	return urls, nil
 }
 
-// parseCookiesFile detects and parses both JSON and TXT cookie formats
+// Cookie parsing functions
 func parseCookiesFile(filePath string) ([]*network.CookieParam, error) {
 	content, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, err
 	}
 
-	// Check if this is a JSON file by extension
+	// Determine file type based on extension and content
 	isJSON := strings.HasSuffix(strings.ToLower(filePath), ".json")
-
-	// If we're not sure by extension, check content
 	if !isJSON && !strings.HasSuffix(strings.ToLower(filePath), ".txt") {
 		trimmed := strings.TrimSpace(string(content))
 		isJSON = strings.HasPrefix(trimmed, "[") && strings.HasSuffix(trimmed, "]")
@@ -439,7 +361,6 @@ func parseCookiesFile(filePath string) ([]*network.CookieParam, error) {
 	return parseNetscapeCookies(content)
 }
 
-// parseJSONCookies parses cookies in JSON format
 func parseJSONCookies(content []byte) ([]*network.CookieParam, error) {
 	var jsonCookies []JSONCookie
 	if err := json.Unmarshal(content, &jsonCookies); err != nil {
@@ -482,7 +403,6 @@ func parseJSONCookies(content []byte) ([]*network.CookieParam, error) {
 	return cookies, nil
 }
 
-// parseNetscapeCookies parses cookies in Netscape cookies.txt format
 func parseNetscapeCookies(content []byte) ([]*network.CookieParam, error) {
 	lines := strings.Split(string(content), "\n")
 	var cookies []*network.CookieParam
@@ -513,7 +433,7 @@ func parseNetscapeCookies(content []byte) ([]*network.CookieParam, error) {
 		if len(fields) > 4 {
 			expiryStr := fields[4]
 			if expiryStr != "" && expiryStr != "0" {
-				expiry, err := parseExpiry(expiryStr)
+				expiry, err := parseInt64(expiryStr)
 				if err == nil && expiry > 0 {
 					t := cdp.TimeSinceEpoch(time.Unix(expiry, 0))
 					cookie.Expires = &t
@@ -525,14 +445,6 @@ func parseNetscapeCookies(content []byte) ([]*network.CookieParam, error) {
 	}
 
 	return cookies, nil
-}
-
-func parseExpiry(s string) (int64, error) {
-	expiry, err := parseInt64(s)
-	if err != nil {
-		return 0, err
-	}
-	return expiry, nil
 }
 
 func parseInt64(s string) (int64, error) {
@@ -573,7 +485,6 @@ func downloadWithYtDlp(videoURL, cookiesFile, outputDir string) error {
 	return cmd.Run()
 }
 
-// convertJSONToNetscapeCookies converts JSON cookies to Netscape format for yt-dlp
 func convertJSONToNetscapeCookies(jsonFile string) (string, error) {
 	content, err := os.ReadFile(jsonFile)
 	if err != nil {
