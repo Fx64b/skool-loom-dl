@@ -143,10 +143,14 @@ func scrapeWithLogin(pageURL, email, password string, waitTime int, headless boo
 
 	fmt.Println("📍 Landed on:", currentURL)
 
-	// Look for login button and click it
 	err = chromedp.Run(ctx, chromedp.Tasks{
-		chromedp.Click(`//button[@type="submit" and .//span[contains(text(), "Log") or contains(text(), "Log In") or contains(text(), "Login")]]`, chromedp.BySearch),
-		chromedp.Sleep(3 * time.Second),
+		// Wait for the button containing a span with "Log In" text to become visible
+		chromedp.WaitVisible(`//button[@type="button"]/span[text()="Log In"]`, chromedp.BySearch),
+
+		// Click the button
+		chromedp.Click(`//button[@type="button"]/span[text()="Log In"]`, chromedp.BySearch),
+
+		chromedp.Sleep(2 * time.Second),
 		chromedp.Location(&currentURL),
 	})
 
@@ -538,24 +542,28 @@ func parseInt64(s string) (int64, error) {
 }
 
 func downloadWithYtDlp(videoURL, cookiesFile, outputDir string) error {
-	// Create temporary cookies.txt file if input is JSON
-	tmpCookiesFile := cookiesFile
-	isJSON := strings.HasSuffix(strings.ToLower(cookiesFile), ".json")
-
-	if isJSON {
-		tmpFile, err := convertJSONToNetscapeCookies(cookiesFile)
-		if err != nil {
-			return fmt.Errorf("error converting JSON cookies: %v", err)
-		}
-		defer os.Remove(tmpFile)
-		tmpCookiesFile = tmpFile
-	}
-
 	args := []string{
-		"--cookies", tmpCookiesFile,
 		"-o", filepath.Join(outputDir, "%(title)s.%(ext)s"),
 		"--no-warnings",
 		videoURL,
+	}
+
+	// Only add cookies argument if a cookies file is provided
+	if cookiesFile != "" {
+		tmpCookiesFile := cookiesFile
+		isJSON := strings.HasSuffix(strings.ToLower(cookiesFile), ".json")
+
+		if isJSON {
+			tmpFile, err := convertJSONToNetscapeCookies(cookiesFile)
+			if err != nil {
+				return fmt.Errorf("error converting JSON cookies: %v", err)
+			}
+			defer os.Remove(tmpFile)
+			tmpCookiesFile = tmpFile
+		}
+
+		// Add cookies argument only when we have a valid file
+		args = append([]string{"--cookies", tmpCookiesFile}, args...)
 	}
 
 	cmd := exec.Command("yt-dlp", args...)
