@@ -21,7 +21,6 @@ Use this tool only to download content you have the right to access. Please resp
 - Downloads videos using yt-dlp with proper authentication
 - Configurable page loading wait time
 - Toggleable headless mode for debugging
-- Auto-scrolling to capture lazy-loaded content
 
 ## Installation
 
