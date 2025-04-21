@@ -150,8 +150,7 @@ func scrapeWithLogin(pageURL, email, password string, waitTime int, headless boo
 		// Click the button
 		chromedp.Click(`//button[@type="button"]/span[text()="Log In"]`, chromedp.BySearch),
 
-		// Wait for navigation to complete
-		chromedp.Sleep(3 * time.Second),
+		chromedp.Sleep(2 * time.Second),
 		chromedp.Location(&currentURL),
 	})
 
