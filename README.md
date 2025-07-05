@@ -33,7 +33,7 @@ Use this tool only to download content you have the right to access. Please resp
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/skool-loom-dl
+git clone https://github.com/fx64b/skool-loom-dl
 cd skool-loom-dl
 
 # Build the executable
