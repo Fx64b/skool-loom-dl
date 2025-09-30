@@ -1,0 +1,130 @@
+name: Build and Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.0.0)'
+        required: true
+        type: string
+
+jobs:
+  build:
+    name: Build Cross-Platform Binaries
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            platform: linux-amd64
+          - goos: linux
+            goarch: arm64
+            platform: linux-arm64
+          - goos: windows
+            goarch: amd64
+            platform: windows-amd64
+            extension: .exe
+          - goos: windows
+            goarch: arm64
+            platform: windows-arm64
+            extension: .exe
+          - goos: darwin
+            goarch: amd64
+            platform: darwin-amd64
+          - goos: darwin
+            goarch: arm64
+            platform: darwin-arm64
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.24.2'
+          cache: true
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          mkdir -p dist
+          go build -ldflags="-s -w" -o dist/skool-loom-dl-${{ matrix.platform }}${{ matrix.extension }} .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: skool-loom-dl-${{ matrix.platform }}
+          path: dist/skool-loom-dl-${{ matrix.platform }}${{ matrix.extension }}
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Display structure of downloaded files
+        run: ls -la dist/
+
+      - name: Prepare release files
+        run: |
+          mkdir -p release
+          cp dist/skool-loom-dl-linux-amd64/skool-loom-dl-linux-amd64 release/
+          cp dist/skool-loom-dl-linux-arm64/skool-loom-dl-linux-arm64 release/
+          cp dist/skool-loom-dl-windows-amd64/skool-loom-dl-windows-amd64.exe release/
+          cp dist/skool-loom-dl-windows-arm64/skool-loom-dl-windows-arm64.exe release/
+          cp dist/skool-loom-dl-darwin-amd64/skool-loom-dl-darwin-amd64 release/
+          cp dist/skool-loom-dl-darwin-arm64/skool-loom-dl-darwin-arm64 release/
+          ls -la release/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.event.inputs.version }}
+          name: Release ${{ github.event.inputs.version }}
+          body: |
+            ## Release ${{ github.event.inputs.version }}
+            
+            Cross-platform binaries for skool-loom-dl:
+            
+            ### Supported Platforms:
+            - **Linux (x64)**: `skool-loom-dl-linux-amd64`
+            - **Linux (ARM64)**: `skool-loom-dl-linux-arm64`
+            - **Windows (x64)**: `skool-loom-dl-windows-amd64.exe`
+            - **Windows (ARM64)**: `skool-loom-dl-windows-arm64.exe`
+            - **macOS (Intel)**: `skool-loom-dl-darwin-amd64`
+            - **macOS (Apple Silicon)**: `skool-loom-dl-darwin-arm64`
+            
+            ### Installation:
+            1. Download the appropriate binary for your platform
+            2. Make it executable (Linux/macOS): `chmod +x skool-loom-dl-*`
+            3. Run with: `./skool-loom-dl-* -h` to see usage options
+            
+            ### Prerequisites:
+            - [yt-dlp](https://github.com/yt-dlp/yt-dlp#installation) must be installed and available in your PATH
+          draft: false
+          prerelease: false
+          files: |
+            release/skool-loom-dl-linux-amd64
+            release/skool-loom-dl-linux-arm64
+            release/skool-loom-dl-windows-amd64.exe
+            release/skool-loom-dl-windows-arm64.exe
+            release/skool-loom-dl-darwin-amd64
+            release/skool-loom-dl-darwin-arm64

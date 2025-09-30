@@ -26,6 +26,7 @@ go.work.sum
 
 .idea
 downloads
+dist
 
 *.json
 skool-loom-dl
