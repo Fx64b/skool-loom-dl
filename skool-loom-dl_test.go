@@ -177,7 +177,11 @@ func TestConvertJSONToNetscapeCookies(t *testing.T) {
 	if err != nil {
 		t.Fatalf("convertJSONToNetscapeCookies() error = %v", err)
 	}
-	defer os.Remove(netscapeFile)
+	defer func() {
+		if err := os.Remove(netscapeFile); err != nil {
+			t.Logf("Failed to remove temp file: %v", err)
+		}
+	}()
 
 	// Read the converted file
 	content, err := os.ReadFile(netscapeFile)
