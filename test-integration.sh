@@ -20,19 +20,19 @@ docker run --rm skool-loom-dl:test --help > /dev/null 2>&1 && echo "✅ Binary i
 
 # Test 2: Check that yt-dlp is installed and accessible
 echo "Test 2: Verify yt-dlp is installed..."
-docker run --rm skool-loom-dl:test sh -c "which yt-dlp" > /dev/null 2>&1 && echo "✅ yt-dlp is installed" || (echo "❌ yt-dlp not found" && exit 1)
+docker run --rm --entrypoint sh skool-loom-dl:test -c "which yt-dlp" > /dev/null 2>&1 && echo "✅ yt-dlp is installed" || (echo "❌ yt-dlp not found" && exit 1)
 
 # Test 3: Check that yt-dlp can run
 echo "Test 3: Verify yt-dlp can execute..."
-docker run --rm skool-loom-dl:test sh -c "yt-dlp --version" > /dev/null 2>&1 && echo "✅ yt-dlp is functional" || (echo "❌ yt-dlp cannot execute" && exit 1)
+docker run --rm --entrypoint sh skool-loom-dl:test -c "yt-dlp --version" > /dev/null 2>&1 && echo "✅ yt-dlp is functional" || (echo "❌ yt-dlp cannot execute" && exit 1)
 
 # Test 4: Check that chromium is installed
 echo "Test 4: Verify chromium is installed..."
-docker run --rm skool-loom-dl:test sh -c "which chromium-browser || which chromium" > /dev/null 2>&1 && echo "✅ Chromium is installed" || (echo "❌ Chromium not found" && exit 1)
+docker run --rm --entrypoint sh skool-loom-dl:test -c "which chromium-browser || which chromium" > /dev/null 2>&1 && echo "✅ Chromium is installed" || (echo "❌ Chromium not found" && exit 1)
 
 # Test 5: Check that ffmpeg is installed
 echo "Test 5: Verify ffmpeg is installed..."
-docker run --rm skool-loom-dl:test sh -c "which ffmpeg" > /dev/null 2>&1 && echo "✅ ffmpeg is installed" || (echo "❌ ffmpeg not found" && exit 1)
+docker run --rm --entrypoint sh skool-loom-dl:test -c "which ffmpeg" > /dev/null 2>&1 && echo "✅ ffmpeg is installed" || (echo "❌ ffmpeg not found" && exit 1)
 
 # Test 6: Test that binary shows proper error without arguments
 echo "Test 6: Verify proper error handling without arguments..."
