@@ -30,3 +30,7 @@ dist
 
 *.json
 skool-loom-dl
+
+# Test coverage files
+coverage.out
+coverage.html
