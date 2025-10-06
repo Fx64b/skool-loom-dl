@@ -111,9 +111,80 @@ If you choose to use cookies instead of email/password:
 - **Login issues**: Try `-headless=false` to see the browser and debug
 - **Specific video errors**: Check if the video is still available on Loom
 
+## Development and Testing
+
+### Running Tests
+
+This project includes comprehensive unit and integration tests.
+
+#### Unit Tests
+
+Run unit tests with coverage:
+
+```bash
+# Run all tests
+go test -v ./...
+
+# Run tests with coverage
+go test -v -coverprofile=coverage.out -covermode=atomic ./...
+
+# View coverage report
+go tool cover -func=coverage.out
+
+# Generate HTML coverage report
+go tool cover -html=coverage.out -o coverage.html
+```
+
+The unit tests cover:
+- Loom URL extraction from HTML (share and embed URLs)
+- Cookie parsing (JSON and Netscape formats)
+- Cookie format conversion
+- Utility functions
+
+#### Integration Tests
+
+Run Docker-based integration tests to verify the full application with yt-dlp:
+
+```bash
+# Make the script executable (first time only)
+chmod +x test-integration.sh
+
+# Run integration tests
+./test-integration.sh
+```
+
+The integration tests verify:
+- Docker image builds successfully
+- Binary is executable in the container
+- yt-dlp is installed and functional
+- Chromium is available
+- ffmpeg is available
+- Proper error handling
+
+### Continuous Integration
+
+The project uses GitHub Actions for automated testing:
+
+1. **Lint and Build** (`lint-and-build.yml`): Runs on every push and PR
+   - Lints code with golangci-lint
+   - Builds the project
+   - Runs unit tests with coverage reporting
+
+2. **Docker Integration Tests** (`docker-integration-test.yml`): Runs on every push and PR
+   - Builds the Docker image
+   - Runs integration tests in a containerized environment
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
+
+### Development Guidelines
+
+1. Write tests for new functionality
+2. Ensure all tests pass before submitting PR
+3. Run linter: `golangci-lint run ./...`
+4. Maintain or improve code coverage
+5. Update documentation as needed
 
 ### Creating Releases (Maintainers)
 
